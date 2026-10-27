@@ -82,7 +82,7 @@ FEATURE_AUDIT: dict[str, tuple[str, str]] = {
     "pharmacy_claims": ("debatable", "influence total claims, but unsure if needed for final input"), # influence total claims, but unsure if needed for final input
     "specialty_drug_fills": ("safe", "fine"), # fine, 
     "total_billed_cents": ("leaky", "paired with total_allowed cells, it leaks some info to the model"), # paired with total_allowed cells, it leaks some info to the model (both provide the same value)
-    "total_allowed_cents": ("safe", "more stable then billed cents"), # good - (more stabele than billed cents)
+    "total_allowed_cents": ("leaky", "more stable then billed cents but still leaky"), # good - (more stabele than billed cents)
     "total_plan_paid_cents": ("not_a_feature", "target was derived from this feature"), # very leaky, we got our targget feature from this column
     "total_oop_cents": ("debatable", "nice to have, little value but useful"), # nice to have 
     "unique_diagnosis_codes": ("safe", "good"), # good 
