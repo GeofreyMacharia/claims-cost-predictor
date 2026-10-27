@@ -74,21 +74,21 @@ VALID_VERDICTS = ("safe", "leaky", "debatable", "not_a_feature")
 # spending happens. Keep that timeline in mind.
 # ---------------------------------------------------------------------------
 FEATURE_AUDIT: dict[str, tuple[str, str]] = {
-    "age_bucket": ("TODO", ""),
-    "sex": ("TODO", ""),
-    "region": ("TODO", ""),
-    "total_claims": ("TODO", ""),
-    "medical_claims": ("TODO", ""),
-    "pharmacy_claims": ("TODO", ""),
-    "specialty_drug_fills": ("TODO", ""),
-    "total_billed_cents": ("TODO", ""),
-    "total_allowed_cents": ("TODO", ""),
-    "total_plan_paid_cents": ("TODO", ""),
-    "total_oop_cents": ("TODO", ""),
-    "unique_diagnosis_codes": ("TODO", ""),
-    "inpatient_claims": ("TODO", ""),
-    "has_specialty_drug": ("TODO", ""),
-    "is_high_cost": ("TODO", ""),
+    "age_bucket": ("not_a_feature", "bin/bucket is a terible feature for a model"), #a bin/bucket is a terible feature for a model, either get the age or discard the entire column
+    "sex": ("safe", "good"), # good
+    "region": ("safe", "dood"), # good
+    "total_claims": ("leaky", " high mnulticollineratriy value with other claims"), # very leaky, high mnulticollineratriy value with other claims
+    "medical_claims": ("debatable", "influence total claims, but unsure if needed for final input"), # influence total claims, but unsure if needed for final input
+    "pharmacy_claims": ("debatable", "influence total claims, but unsure if needed for final input"), # influence total claims, but unsure if needed for final input
+    "specialty_drug_fills": ("safe", "fine"), # fine, 
+    "total_billed_cents": ("leaky", "paired with total_allowed cells, it leaks some info to the model"), # paired with total_allowed cells, it leaks some info to the model (both provide the same value)
+    "total_allowed_cents": ("leaky", "more stable then billed cents but still leaky"), # good - (more stabele than billed cents)
+    "total_plan_paid_cents": ("not_a_feature", "target was derived from this feature"), # very leaky, we got our targget feature from this column
+    "total_oop_cents": ("debatable", "nice to have, little value but useful"), # nice to have 
+    "unique_diagnosis_codes": ("safe", "good"), # good 
+    "inpatient_claims": ("safe", "good"), # good
+    "has_specialty_drug": ("debatable", "nice to have"), # nice to have
+    "is_high_cost": ("not_a_feature", "this is our target we are tryin to predict"), # our target ( must be its own variable - not inclyded as input feature.)
 }
 
 
@@ -112,7 +112,11 @@ def approved_claims(claims: pd.DataFrame) -> pd.DataFrame:
 
     Roughly 8% of claims are denied, so this line changes your numbers.
     """
-    raise NotImplementedError("Implement approved_claims()")
+    approve =  claims[claims['adjudication_status']== 'approved']
+    # raise NotImplementedError("Implement approved_claims()")
+    return approve
+    
+
 
 
 def build_member_features(members: pd.DataFrame, claims: pd.DataFrame) -> pd.DataFrame:
@@ -146,7 +150,29 @@ def build_member_features(members: pd.DataFrame, claims: pd.DataFrame) -> pd.Dat
         for them. Should their total_claims be NaN, or 0? Whatever you choose,
         the column dtypes should still be numeric.
     """
-    raise NotImplementedError("Implement build_member_features()")
+    # raise NotImplementedError("Implement build_member_features()")
+    # aggregate the claims data
+    claims_agg = claims.groupby("member_id").agg(
+    total_claims=("member_id", "size"),  # all counts of the users claims
+    medical_claims=("is_pharmacy", lambda s: (~s).sum()),
+    pharmacy_claims=("is_pharmacy", "sum"),
+    specialty_drug_fills=("is_specialty_drug", "sum"),
+    total_billed_cents=("billed_cents", "sum"),
+    total_allowed_cents=("allowed_cents", "sum"),
+    total_plan_paid_cents=("plan_paid_cents", "sum"),
+    total_oop_cents=("out_of_pocket_cents", "sum"),
+    unique_diagnosis_codes=("diagnosis_code", lambda s: s[s.notna() & (s != "")].nunique()),
+    inpatient_claims=("claim_type", lambda s: (s == "Institutional").sum()),
+    has_specialty_drug=("is_specialty_drug", "any"),
+).reset_index()
+
+    # merge with members
+    claim_members = pd.merge(members, claims_agg, on='member_id', how="left")
+    # No claims means 0, not NaN, so the columns stay numeric.
+    count_cols = [c for c in claims_agg.columns if c not in ("member_id", "has_specialty_drug")]
+    claim_members[count_cols] = claim_members[count_cols].fillna(0).astype(int)
+    claim_members["has_specialty_drug"] = claim_members["has_specialty_drug"].fillna(False).astype(bool)
+    return claim_members
 
 
 def add_label(features: pd.DataFrame) -> pd.DataFrame:
@@ -160,7 +186,10 @@ def add_label(features: pd.DataFrame) -> pd.DataFrame:
     Write the one line that creates the label, then look hard at which column
     you just used. You will need that thought in TODO 4.
     """
-    raise NotImplementedError("Implement add_label()")
+    # Both sides are in cents, so no conversion is needed.
+    features["is_high_cost"] = (features["total_plan_paid_cents"] > HIGH_COST_THRESHOLD_CENTS).astype(int) # must be cents apparently
+    # raise NotImplementedError("Implement add_label()")
+    return features
 
 
 def model_features() -> list[str]:
@@ -171,7 +200,18 @@ def model_features() -> list[str]:
     changing a verdict above changes what the model sees. Decide for yourself
     whether "debatable" columns are in or out, and be ready to defend it.
     """
-    raise NotImplementedError("Implement model_features()")
+    feature_cols = []
+    for key, (value, reason) in FEATURE_AUDIT.items(): # tuple items
+        if value == "safe" or value == "debatable":
+            feature_cols.append(key)
+        else:
+            pass
+
+    # raise NotImplementedError("Implement model_features()")
+    return feature_cols
+
+
+
 
 
 def print_audit() -> None:
