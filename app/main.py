@@ -23,7 +23,7 @@ from app.schemas import MemberFeatures, PredictionResponse
 from config import HIGH_COST_THRESHOLD_USD
 
 MODEL_PATH = Path("model.joblib")
-DECISION_THRESHOLD = 0.5  # the threshold you defended in Week 5
+DECISION_THRESHOLD = 0.5  
 
 model = None
 
@@ -45,8 +45,12 @@ async def lifespan(app: FastAPI):
 
     Everything before `yield` runs at startup, everything after at shutdown.
     """
-    raise NotImplementedError("Implement the lifespan handler")
-    yield  # noqa: unreachable until you implement the TODO above
+    global model
+    if not MODEL_PATH.exists():
+        raise RuntimeError(f"{MODEL_PATH} not found. Run `python train.py` to create it.")
+    model = joblib.load(MODEL_PATH)
+    yield
+    model = None
 
 
 app = FastAPI(
@@ -67,7 +71,8 @@ def health():
     than hard-coding True; "the process is up" and "the service can serve" are
     different claims.
     """
-    raise NotImplementedError("Implement GET /health")
+    # check if model loaded well
+    return {"status": "ok", "model_loaded": model is not None}
 
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -95,4 +100,21 @@ def predict(features: MemberFeatures):
     nonsense (pharmacy_claims greater than total_claims, say). FastAPI will not
     catch that for you.
     """
-    raise NotImplementedError("Implement POST /predict")
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded.")
+
+    # Valid JSON can still describe an impossible member, so reject it rather than score it.
+    if (features.inpatient_claims > features.medical_claims
+            or features.specialty_drug_fills > features.pharmacy_claims
+            or features.unique_diagnosis_codes > features.medical_claims):
+        raise HTTPException(status_code=422, detail="Sub-counts cannot exceed their parent claim counts.")
+
+    # One row, passed in as-is, because the pipeline does its own scaling and encoding.
+    row = pd.DataFrame([features.model_dump()])
+    proba = float(model.predict_proba(row)[0, 1])
+
+    return PredictionResponse(
+        is_high_cost=proba >= DECISION_THRESHOLD,
+        probability=round(proba, 4),
+        threshold_dollars=HIGH_COST_THRESHOLD_USD,
+    )
