@@ -43,7 +43,7 @@ class MemberFeatures(BaseModel):
 
     age_bucket: Literal["18-29", "30-39", "40-49", "50-59", "60-64"]
     sex: Literal["F", "M"]
-    region: Literal["Southwest", "..."]  # replace with the real region list from the check above
+    rregion: Literal["Midwest", "Northeast", "Southeast", "Southwest", "West"]  # replace with the real region list from the check above
 
     # Counts can't be negative, so ge=0 rejects values below zero.
     medical_claims: int = Field(ge=0)
@@ -51,7 +51,7 @@ class MemberFeatures(BaseModel):
     specialty_drug_fills: int = Field(ge=0)
     unique_diagnosis_codes: int = Field(ge=0)
     inpatient_claims: int = Field(ge=0)
-    ...
+
 
 
 class PredictionResponse(BaseModel):

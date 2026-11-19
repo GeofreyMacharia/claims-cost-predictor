@@ -64,24 +64,15 @@ ASSESSMENT = "Utilizing the optimal threshold value chosen during evaluation of 
 
 
 def confusion_counts(y_true, y_pred) -> dict[str, int]:
-    """
-    TODO 1 — return {"tp": .., "fp": .., "fn": .., "tn": ..}.
+    # Arrays compare element by element; plain lists would compare as a whole.
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
 
-    Write it with vectorized comparisons rather than a loop. Both inputs are
-    0/1 arrays or Series.
-    """
-    # tp -> ypred * y_true -> tp = 1 
     tp = int(((y_true == 1) & (y_pred == 1)).sum())
     tn = int(((y_true == 0) & (y_pred == 0)).sum())
     fn = int(((y_true == 1) & (y_pred == 0)).sum())
-    fp = int(((y_pred == 1) & (y_true == 0)).sum())
-
-    return {
-        "tp":tp,
-        "tn":tn,
-        "fn":fn,
-        "fp":fp
-    }
+    fp = int(((y_true == 0) & (y_pred == 1)).sum())
+    return {"tp": tp, "fp": fp, "fn": fn, "tn": tn}
 
 
 def group_metrics(df: pd.DataFrame, group_col: str,
